@@ -1,5 +1,6 @@
 #include <stdio.h>
-
+#include <stdlib.h> 
+#include <math.h> 
 /* ******************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
 
@@ -34,103 +35,282 @@ struct pkt {
    char payload[20];
     };
 
+
+    
+int starttimer(int AorB, float increment);
+int stoptimer(int AorB);
+int tolayer3(int AorB, struct pkt packet);
+int tolayer5(int AorB, char datasent[20]);
+
+float jimsrand();
+int generate_next_arrival();
+void init();
+int printevlist();
+
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
+typedef struct pkty
+{
+  struct pkt* p;
+  int e;
+}pkty;
 
-struct pkt* A-packet=(struct pkt*)malloc(sizeof(struct pkt));
 
-static int A-ex-ack
-static int A-ou-seq
+static pkty* A_packet[50];
 
-static int B-ex-seq
-static int B-ou-ack
+static int addsn;
+
+static int B_ex_seq;
+static int B_had_seq;
+
+static int left;
+static int right;
+static int large;
+static int window;
+
+int snchange(int sn)
+{
+  if(sn==49)
+  {
+    sn=0;
+  }
+  else
+  {
+    sn++;
+  }
+  return sn;
+}
+
+int snexist(int ack)
+{
+  int m=left;
+  int c=0;
+  while(m!=snchange(right))
+  {
+    if(ack==m)
+    {
+      c=1;
+      break;
+    }
+    m=snchange(m);
+  }
+  
+  return c;
+}
+
+int gene_check(struct pkt packet)
+{
+  int count=0;
+  for(int i=0;i<20;i++)
+  {
+    count+=packet.payload[i];
+  }
+  count+=packet.acknum;
+  count+=packet.seqnum;
+
+  return count;
+}
+
+
+
+
+
+void packeted(struct msg message)
+{
+  addsn=right;
+  for(int i=0;i<50;i++)
+  {
+    if(A_packet[addsn]->e==1)
+    {
+      addsn=snchange(addsn);
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  if(A_packet[addsn]->e==0)
+  {
+    for(int i=0;i<20;i++)
+    {
+      A_packet[addsn]->p->payload[i]=message.data[i];
+    }
+    A_packet[addsn]->p->checksum=gene_check(*A_packet[addsn]->p);
+    A_packet[addsn]->e=1;
+  }
+  else
+  {
+    return ;
+  }
+}
 
 
 /* called from layer 5, passed the data to be sent to other side */
 
-int gene_check(struct pkt packet)
-{
-    int g=0;
-    for(int i=0;i<20;i++)
-    {
-        g=g+packet.payload[i];
-    }
-    
-    g=g+packet.seqnum+acknum;
-    
-    return g;
-    
-}
-void A_packet_init(struct msg message)
-{
-    for(int i=0;i<20;i++)
-    {
-        A-packet.acknum=0;
-        A-packet.seqnum=A-ou-seq;
-        A-packet.checknum=gene_check(packet);
-        A-packet->payload[i]=message.data[i];
-    }
-}
-A_output(message)
+
+
+void A_output(message)
   struct msg message;
 {
-    A_packet_init(message);
-    tolayer3(0,A-packet);
+  int m=A_packet[left]->e;
+
+  packeted(message);
+
+  if(m==0)
+  {
+    stoptimer(0);
     starttimer(0,20);
-
+    tolayer3(0,*A_packet[right]->p);
+    right=snchange(right);
+    large++;
+  }
+  return ;
 }
 
-B_output(message)  /* need be completed only for extra credit */
-  struct msg message;
-{
-
-}
 
 /* called from layer 3, when a packet arrives for layer 4 */
 
-A_input(packet)
-  struct pkt packet;
+void A_input(packet)
+struct pkt packet;
 {
-   
+  if(gene_check(packet)!=packet.checksum)
+  {
+    return ;
+  }
+  int ack=packet.acknum;
+  if(snexist(ack)==1)
+  {
+    stoptimer(0);
+    while(left!=ack)
+    {
+      A_packet[left]->e=0;
+      left=snchange(left);
+      large--;
+    }
+    if(A_packet[left]->e==1)
+    {
+      starttimer(0,20);
+      tolayer3(0,*A_packet[left]->p);
+    }
+    else
+    {
+      return;
+    }
+  }
 
+  while(large<=window&&A_packet[snchange(right)]->e==1)
+  {
+    tolayer3(0,*A_packet[right]->p);
+    right=snchange(right);
+    large++;
+  }
+  
+  
+  
 }
 
 /* called when A's timer goes off */
-A_timerinterrupt()
+void A_timerinterrupt()
 {
-
+  int m=left;
+  if(A_packet[m]->e==0)
+  {
+    return ;
+  }
+  stoptimer(0);
+  
+  while(A_packet[m]->e==1&&m!=snchange(right))
+  {
+    tolayer3(0,*A_packet[m]->p);
+    m=snchange(m);
+  }
+  starttimer(0,20);
 }  
 
-/* the following routine will be called once (only) before any other */
-/* entity A routines are called. You can use it to do any initialization */
-A_init()
-{
-}
-
+static int count=0;
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
-B_input(packet)
-  struct pkt packet;
+void B_input(packet)
+struct pkt packet;
 {
-    int checknum=gene_check(packet);
-    if(checknum=packet.checknum)
-    {
-        
-    }
+  if(gene_check(packet)!=packet.checksum)
+  {
+    packet.acknum=B_had_seq;
+    packet.checksum=gene_check(packet);
+    tolayer3(1,packet);
+    return ;
+  }
+  
+  int seq=packet.seqnum;
+  
+  if(seq!=B_ex_seq)
+  {
+    packet.acknum=B_had_seq;
+    packet.checksum=gene_check(packet);
+    tolayer3(1,packet);
+    return ;
+  }
+  
+  B_had_seq=B_ex_seq;
+  B_ex_seq=snchange(B_ex_seq);
+  packet.acknum=B_had_seq;
+  packet.checksum=gene_check(packet);
+  tolayer3(1,packet);
+  tolayer5(1,packet.payload);
+  count++;
+  return ;
+  
 }
 
+
+
+
+
 /* called when B's timer goes off */
-B_timerinterrupt()
+void B_timerinterrupt()
 {
 }
 
 /* the following rouytine will be called once (only) before any other */
 /* entity B routines are called. You can use it to do any initialization */
-B_init()
+
+/* the following routine will be called once (only) before any other */
+/* entity A routines are called. You can use it to do any initialization */
+void A_init()
+{
+  addsn=0;
+  
+  B_ex_seq=0;
+  B_had_seq=49;
+  
+  left=0;
+  right=0;
+  large=1;
+  window=8;
+  
+  for(int i=0;i<50;i++)
+  {
+    A_packet[i]=(pkty*)malloc(sizeof(pkty));
+    A_packet[i]->e=0;
+    A_packet[i]->p=(struct pkt*)malloc(sizeof(struct pkt));
+    A_packet[i]->p->acknum=0;
+    A_packet[i]->p->seqnum=i;
+    
+  }
+  
+
+}
+void B_init()
 {
 }
 
+void B_output(message)  /* need be completed only for extra credit */
+  struct msg message;
+{
+
+}
 
 /*****************************************************************
 ***************** NETWORK EMULATION CODE STARTS BELOW ***********
@@ -181,7 +361,11 @@ int   ntolayer3;           /* number sent into layer 3 */
 int   nlost;               /* number lost in media */
 int ncorrupt;              /* number corrupted by media*/
 
-main()
+int insertevent(struct event *p);
+
+
+
+int main()
 {
    struct event *eventptr;
    struct msg  msg2give;
@@ -259,11 +443,13 @@ main()
 
 terminate:
    printf(" Simulator terminated at time %f\n after sending %d msgs from layer5\n",time,nsim);
+
+   printf("B received count: %d\n", count);
 }
 
 
 
-init()                         /* initialize the simulator */
+void init()                         /* initialize the simulator */
 {
   int i;
   float sum, avg;
@@ -291,7 +477,7 @@ init()                         /* initialize the simulator */
     printf("It is likely that random number generation on your machine\n" ); 
     printf("is different from what this emulator expects.  Please take\n");
     printf("a look at the routine jimsrand() in the emulator code. Sorry. \n");
-    exit();
+    exit(0);
     }
 
    ntolayer3 = 0;
@@ -323,7 +509,7 @@ generate_next_arrival()
 {
    double x,log(),ceil();
    struct event *evptr;
-    char *malloc();
+ 
    float ttime;
    int tempint;
 
@@ -392,8 +578,6 @@ printevlist()
   printf("--------------\n");
 }
 
-
-
 /********************** Student-callable ROUTINES ***********************/
 
 /* called by students routine to cancel a previously-started timer */
@@ -434,7 +618,7 @@ float increment;
 
  struct event *q;
  struct event *evptr;
- char *malloc();
+
 
  if (TRACE>2)
     printf("          START TIMER: starting timer at %f\n",time);
@@ -462,7 +646,7 @@ struct pkt packet;
 {
  struct pkt *mypktptr;
  struct event *evptr,*q;
- char *malloc();
+
  float lastime, x, jimsrand();
  int i;
 
