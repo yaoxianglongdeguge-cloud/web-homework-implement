@@ -10,6 +10,7 @@ extern struct rtpkt {
 extern int TRACE;
 extern int YES;
 extern int NO;
+extern float clocktime;
 
 struct distance_table 
 {
@@ -19,22 +20,139 @@ struct distance_table
 
 /* students to write the following two routines, and maybe some others */
 
+extern void tolayer2(struct rtpkt packet);
+void printdt2(struct distance_table *dtptr);
+
+int min2(int a,int b)
+{
+  if(a>=b)
+  {
+    return b;
+  }
+  else
+  {
+    return a;
+  }
+  return 0;
+}
+
+void send2(int arr[])
+{
+  struct rtpkt sendpkt;
+  sendpkt.sourceid=2;
+  for(int i=0;i<4;i++)
+  {
+    int count=9999;
+    for(int j=0;j<4;j++)
+    {
+      count=min2(count,dt2.costs[i][j]);
+    }
+    sendpkt.mincost[i]=count;
+  }
+    printf("Node 2's current mincost: [%d, %d, %d, %d]\n",
+       sendpkt.mincost[0], sendpkt.mincost[1], sendpkt.mincost[2], sendpkt.mincost[3]);
+
+   if(arr!=NULL)
+  {
+    int change=0;
+    for(int m=0;m<4;m++)
+    {
+      if(arr[m]!=sendpkt.mincost[m])
+      {
+        change=1;
+      }
+    }
+    if(change==0)
+    {
+      printf("Distance table updated: no\n");
+      return;
+    }
+  }
+
+  sendpkt.destid=1;
+  tolayer2(sendpkt);
+  sendpkt.destid=0;
+  tolayer2(sendpkt);
+  sendpkt.destid=3;
+  tolayer2(sendpkt);
+  if(arr==NULL)
+  {
+    printf("Distance table initialized: yes\n");
+  }
+  else
+  {
+    printf("Distance table updated: yes\n");
+  }
+  printf("Packets sent to: 0,1,3\n\n");
+}
+
 void rtinit2() 
 {
+  
+   for(int i=0;i<4;i++)
+  {
+    for(int j=0;j<4;j++)
+    {
+      dt2.costs[i][j]=999;
+    }
+  }
+   for(int i=0;i<4;i++)
+  {
+  dt2.costs[2][i]=0;
+  }
+  dt2.costs[1][1]=1;
+  dt2.costs[0][0]=3;
+  dt2.costs[3][3]=2;
+
+  
+  printf("At time t=%.3f, rinit2() called\n", clocktime);
+  send2(NULL);
+  printdt2(&dt2);
+
 }
 
-
-void rtupdate2(rcvdpkt)
-  struct rtpkt *rcvdpkt;
-  
+void rtupdate2(struct rtpkt *rcvdpkt)
 {
+  int sid=rcvdpkt->sourceid;
+  int did=rcvdpkt->destid;
+  int *mic=rcvdpkt->mincost;
 
+  if(did!=2)
+  {
+    return;
+  }
+
+  int old_mincost[4];
+
+  for(int i=0;i<4;i++)
+  {
+    int count=9999;
+    for(int j=0;j<4;j++)
+    {
+      count=min2(count,dt2.costs[i][j]);
+    }
+    old_mincost[i]=count;
+  }
+
+    for(int i=0;i<4;i++)
+    {
+      dt2.costs[i][sid]=min2(dt2.costs[i][sid],dt2.costs[sid][sid]+mic[i]);
+    }
+    
+  
+
+    
+  printf("At time t=%.3f, rtupdate2() called, sender=%d\n", clocktime, sid);
+  printdt2(&dt2);
+  send2(old_mincost);
+
+  
+  return;
+  
 }
 
 
-printdt2(dtptr)
-  struct distance_table *dtptr;
-  
+void printdt2(struct distance_table *dtptr)
 {
   printf("                via     \n");
   printf("   D2 |    0     1    3 \n");

@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 
-#define LINKCHANGES 1 
+#define LINKCHANGES 0 
 /* ******************************************************************
 Programming assignment 3: implementing distributed, asynchronous,
                           distance vector routing.
@@ -23,12 +24,7 @@ int TRACE = 1;             /* for my debugging */
 int YES = 1;
 int NO = 0;
 
-creatertpkt( initrtpkt, srcid, destid, mincosts)
-struct rtpkt *initrtpkt;
-int srcid;
-int destid;
-int mincosts[];
-
+void creatertpkt(struct rtpkt *initrtpkt,int srcid, int destid, int mincosts[])
 {
   int i;
   initrtpkt->sourceid = srcid;
@@ -70,7 +66,28 @@ struct event *evlist = NULL;   /* the event list */
 float clocktime = 0.000;
 
 
-main()
+
+void init();  
+float jimsrand(); 
+void insertevent(struct event *p);
+void printevlist();
+void tolayer2(struct rtpkt packet);
+extern void rtinit0();
+extern void rtinit1();
+extern void rtinit2();
+extern void rtinit3();
+
+
+extern void rtupdate0(struct rtpkt *rcvdpkt);
+extern void rtupdate2(struct rtpkt *rcvdpkt);
+extern void rtupdate1(struct rtpkt *rcvdpkt);
+extern void rtupdate3(struct rtpkt *rcvdpkt);
+
+extern void linkhandler0(int linkid,int newcost); 
+extern void linkhandler1(int linkid,int newcost); 
+
+
+int main()
 {
    struct event *eventptr;
    
@@ -131,7 +148,7 @@ terminate:
 
 
 
-init()                         /* initialize the simulator */
+void init()                         /* initialize the simulator */
 {
   int i;
   float sum, avg;
@@ -150,7 +167,7 @@ init()                         /* initialize the simulator */
     printf("It is likely that random number generation on your machine\n" ); 
     printf("is different from what this emulator expects.  Please take\n");
     printf("a look at the routine jimsrand() in the emulator code. Sorry. \n");
-    exit();
+    exit(0);
     }
 
    clocktime=0.0;                /* initialize time to 0.0 */
@@ -194,8 +211,7 @@ float jimsrand()
 /*****************************************************/
  
 
-insertevent(p)
-   struct event *p;
+void insertevent(struct event *p)
 {
    struct event *q,*qold;
 
@@ -232,7 +248,7 @@ insertevent(p)
          }
 }
 
-printevlist()
+void printevlist()
 {
   struct event *q;
   printf("--------------\nEvent List Follows:\n");
@@ -244,9 +260,7 @@ printevlist()
 
 
 /************************** TOLAYER2 ***************/
-tolayer2(packet)
-  struct rtpkt packet;
-  
+void tolayer2(struct rtpkt packet)
 {
  struct rtpkt *mypktptr;
  struct event *evptr, *q;
@@ -319,4 +333,5 @@ tolayer2(packet)
      printf("    TOLAYER2: scheduling arrival on other side\n");
  insertevent(evptr);
 } 
+
 
